@@ -1,10 +1,10 @@
 // Import the 'fs' module to interact with the file system
 const fs = require('fs')
 
-const dateObject = new Date();
-const day = `${dateObject.getFullYear()}-${String(dateObject.getMonth() + 1).padStart(2, '0')}-${String(dateObject.getDate()).padStart(2, '0')}`
+// const dateObject = new Date();
+// const day = `${dateObject.getFullYear()}-${String(dateObject.getMonth() + 1).padStart(2, '0')}-${String(dateObject.getDate()).padStart(2, '0')}`
 
-// const day = '2024-10-31'
+const day = '2024-11-04'
 
 const dataFileName = '/Users/scottike/SPX/' + day + '/data/now.json'
 const optionChainKey = day + ':0'
@@ -76,13 +76,13 @@ fs.readFile(dataFileName, 'utf8', (err, data) => {
 
     findCandidates()
 
-    processCandidates()
-
-    getVectorRecommendation()
-
-    printData()
-
-    placeOrder()
+    // processCandidates()
+    //
+    // getVectorRecommendation()
+    //
+    // printData()
+    //
+    // placeOrder()
 
 
 })
@@ -263,6 +263,18 @@ function findCandidates() {
             maxActualNetCreditCalls = candidate.netCredit
         }
 
+    })
+
+    console.log('puts')
+    putCandidates.forEach((put) => {
+        // console.log(JSON.stringify(put, null, 2))
+        console.log(put.shortLeg.strikePrice + ',' + put.longLeg.strikePrice  + ',' + put.shortLeg.bid.toFixed(2)  + ',' + put.longLeg.ask.toFixed(2)  + ',' + put.netCredit.toFixed(2)  + ',' + put.closeToATM.toFixed(0) + ',' + put.width.toFixed(0))
+    })
+
+    console.log('calls')
+    callCandidates.forEach((call) => {
+        // console.log(JSON.stringify(call, null, 2))
+        console.log(call.shortLeg.strikePrice + ',' + call.longLeg.strikePrice  + ',' + call.shortLeg.bid.toFixed(2)  + ',' + call.longLeg.ask.toFixed(2)  + ',' + call.netCredit.toFixed(2)  + ',' + call.closeToATM.toFixed(0) + ',' + call.width.toFixed(0))
     })
 
 }
