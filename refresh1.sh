@@ -1,5 +1,3 @@
-export CREDS="QzJiRGdWVE9QWVBtU3Y0QTh6ZnJBNklGRTMxQTMxVU86azZxTWdUeU1Wc0NYUTNYMA=="
-export BEARER_TOKEN='I0.b2F1dGgyLmJkYy5zY2h3YWIuY29t.-_jzzVAVfC9PGbUi3-ehNbYtWzIm3VuiEZoH2-0rRD8@'
 export DATE='2024-10-30'
 export TIME_STAMP=`date | cut -d ' ' -f4 | sed -e "s/:/-/g"`
 echo ${TIME_STAMP}
