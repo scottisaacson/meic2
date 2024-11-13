@@ -12,7 +12,7 @@ command="./recommend1.sh"
 while true; do
     # Get the current time in HH:MM format
     current_time=$(date +"%H:%M")
-    echo "TradeBot Time = " $current_time
+    echo "TradeBot Time = ${current_time}"
     echo "${times[@]}"
 
     # Check if the current time matches any of the specified times
