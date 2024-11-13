@@ -1,0 +1,6 @@
+CLIENT_ID=<id>
+CLIENT_SECRET=<secret>
+REDIRECT_URI=https://127.0.0.1
+LOGIN_ID=<login id>
+PASSWORD=<pwd>
+
