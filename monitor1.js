@@ -8,6 +8,18 @@ const day = `${dateObject.getFullYear()}-${String(dateObject.getMonth() + 1).pad
 const dataDirName = '/Users/scottike/SPX/' + day + '/data'
 
 
+
+const nf = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD'
+})
+
+const pnf = new Intl.NumberFormat('en-US', {
+    style: 'percent',
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+})
+
 let spxSymbol
 let spxLast
 let spxQuoteTime
@@ -16,6 +28,8 @@ let callMap
 
 const startTime = "07:30:00"
 const stopTime = "14:00:00"
+
+const tradingAccountSize = 200000
 
 function getFilesInDirectory(dirPath) {
     try {
@@ -269,7 +283,8 @@ function monitor () {
             longSymbol: ic.putSpread.longID,
             longBTO: ic.putSpread.ask,
             long: ic.putSpread.long,
-            netCredit: ic.putSpread.netCredit
+            netCredit: ic.putSpread.netCredit,
+            width: ic.putSpread.width
         }
         list.push(pos)
         pos = {
@@ -282,7 +297,8 @@ function monitor () {
             longSymbol: ic.callSpread.longID,
             longBTO: ic.callSpread.ask,
             long: ic.callSpread.long,
-            netCredit: ic.callSpread.netCredit
+            netCredit: ic.callSpread.netCredit,
+            width: ic.callSpread.width
         }
         list.push(pos)
     })
@@ -295,6 +311,11 @@ function monitor () {
     let spreadWinnerCount = 0
     let spreadLoserCount = 0
     let spreadTotal = 0
+    let thisBuyingPower
+    let dayBuyingPower
+    let thisRisk
+    let dayRisk
+
 
     // keep track of ICs
     let ironCondorSpreadCount = 0
@@ -310,23 +331,47 @@ function monitor () {
     spreadCount = 0
     spreadWinnerCount = 0
     spreadLoserCount = 0
+    thisBuyingPower = 0
+    dayBuyingPower = 0
+    thisRisk = 0
+    dayRisk = 0
 
     ironCondorStopCount = 0
     ironCondorWinnerCount = 0
     ironCondorLoserCount = 0
     ironCondorBECount = 0
 
+    let shortEnterStatus
+    let longEnterStatus
+    let shortExitStatus
+    let longExitStatus
+    let stopAskPrice
+    let stopBidPrice
+    let stopped
+    let askTime
+    let open
 
     list.forEach((pos) => {
 
         // Each POS is a new spread so start the spread data
         // Each IC is two spreads and so if this is the first spread, start the IC data
+
         if (ironCondorSpreadCount == 0) {
             ironCondorTotal = 0
             ironCondorStopCount = 0
         }
-        spreadTotal = 0
 
+        // new spread
+        spreadTotal = 0
+        enterTime = pos.time
+        thisBuyingPower = 0
+        thisRisk = 0
+
+        spreadTotal += Number(pos.shortSTO)
+        spreadTotal -= Number(pos.longBTO)
+
+        thisRisk = pos.shortStop - pos.netCredit
+        thisBuyingPower = (pos.width * 50)
 
         if (pos.type == 'P') {
             type = 'PUT'
@@ -337,14 +382,6 @@ function monitor () {
             callSpreadDescription = '' + type + ' ' + pos.short + '/' + pos.long
             spreadDescription = callSpreadDescription
         }
-        enterTime = pos.time
-        console.log('====== ' + spreadDescription + ' SPREAD =========')
-
-        console.log('SHORT ' + pos.short + ' STO: ' + Number(pos.shortSTO).toFixed(2))
-        spreadTotal += Number(pos.shortSTO)
-        console.log('LONG ' + pos.long + ' BTO: -' + Number(pos.longBTO).toFixed(2))
-        spreadTotal -= Number(pos.longBTO)
-
 
         let asks = []
         let files = getFilesInDirectory(dataDirName)
@@ -355,55 +392,84 @@ function monitor () {
             }
         })
 
-        let stopped = false
+        stopped = false
         asks.forEach((ask) => {
+            askTime = ask.time
             if (!compareTimeEalier(ask.time, pos.time)) {
                 if (stopped == false) {
                     if (Number(ask.ask) > Number(pos.shortStop)) {
+                        // we are now stopping out this position
                         stopped = true
                         ironCondorStopCount++
-                        console.log('SHORT ' + pos.short + ` STOPPED BTC: -${ask.ask.toFixed(2)}`)
+                        stopAskPrice = ask.ask.toFixed(2)
                         exitTime = ask.time
                         spreadTotal -= Number(ask.ask)
+
                         let bid = getPriceAtTimeForLong(pos, ask.time)
                         if (bid) {
-                            console.log('LONG ' + pos.long + ` EXITED STC: ${bid.bid.toFixed(2)}`)
+                            stopBidPrice = bid.bid.toFixed(2)
                             spreadTotal += Number(bid.bid)
                         } else {
-                            console.log('LONG ' + pos.long + ' ERROR STC')
+                            stopBidPrice = 'ERROR'
+                            spreadTotal += 0
                         }
                     } else {
-                        // console.log(`Time*: ${ask.time}, Ask: ${ask.ask.toFixed(2)}`)
+                        // this price does not stop us out
+                        // just keep going
                     }
+                } else {
+                    // we have already been stopped out, ignore this price
                 }
             } else {
-                // console.log(`Time: ${ask.time}, Ask: ${ask.ask.toFixed(2)}`)
+                // this price is too early, ignore it
             }
-
         })
-        if (stopped == false) {
 
-            exitTime = 'EXPIRED' // '14:00:00'
-            // if (compareTimeEalier(ask.time,'14:00:00' )) {
-            //     exitTime = 'EXPIRED' // '14:00:00'
-            // } else {
-            //     exitTime = 'PENDING'
-            // }
-            console.log('SHORT ' + pos.short + ' ' + exitTime + ' BTC: 0.00')
-            console.log('LONG ' + pos.long + ' ' + exitTime + 'STC: 0.00')
+        shortEnterStatus = 'SHORT ' + pos.short + ' STO: ' + pos.shortSTO
+        longEnterStatus = 'LONG ' + pos.long + ' BTO: ' + pos.longBTO
+
+        if (stopped == false) {
+            // we might be expired, or we might be pending
+            open = true
+            if (compareTimeEalier(askTime,'13:59:00' )) {
+                exitTime = 'PENDING'
+            } else {
+                exitTime = 'EXPIRED'
+            }
+            shortExitStatus = 'SHORT ' + pos.short + ' ' + exitTime
+            longExitStatus = 'LONG ' + pos.long + ' ' + exitTime
+        } else {
+            open = false
+            shortExitStatus = 'SHORT ' + pos.short + ' BTC: ' + stopAskPrice
+            longExitStatus = 'LONG ' + pos.long + ' STC: ' + stopBidPrice
         }
 
         // figure out the spread stuff
-        console.log('Spread P/L: ' + Number(spreadTotal).toFixed(2))
         spreadCount++
         if (Number(spreadTotal) >= 0) {
             spreadWinnerCount++
         } else {
             spreadLoserCount++
         }
-        // console.log('Spread P/L: ' + Number(spreadTotal).toFixed(2))
-        console.log('Spread lifetime: enter = ' + enterTime + ', exit = ' + exitTime)
-        console.log('=======================================')
+
+        let status
+        if (open && (exitTime == 'PENDING')) {
+            status = 'OPEN'
+        } else if (open && (exitTime == 'EXPIRED')) {
+            status = 'CLOSED - EXPIRED'
+        } else {
+            status = 'CLOSED - STOPPED'
+        }
+        console.log('===== ' + spreadDescription + ' ' + status + ' ====================================')
+        console.log(shortEnterStatus)
+        console.log(longEnterStatus)
+        console.log(shortExitStatus)
+        console.log(longExitStatus)
+        console.log('Spread P/L: ' + nf.format(spreadTotal * 100))
+        console.log('Risk: -' + nf.format(thisRisk * 100) + ' (' + pnf.format((thisRisk * 100)/tradingAccountSize) + ')' )
+        console.log('Buying Power: ' + nf.format(thisBuyingPower))
+        console.log('Lifetime: enter = ' + enterTime + ', exit = ' + exitTime)
+        console.log('==============================================================')
 
 
         // now figure out the IC stuff
@@ -421,17 +487,28 @@ function monitor () {
             } else {
                 ironCondorBECount++
             }
-            console.log('****** Iron Condor: ' +  putSpreadDescription + ' and ' + callSpreadDescription + ' ********')
+            console.log('***** Iron Condor: ' +  putSpreadDescription + ' and ' + callSpreadDescription + ' **********')
             console.log('Iron Condor P/L: ' + ironCondorTotal.toFixed(2))
             console.log('Iron Condor Stops: ' + ironCondorStopCount)
-            console.log('*************************************************************\n')
+            console.log('***************************************************************\n')
         }
 
         dayTotal += Number(spreadTotal)
+        dayRisk += thisRisk
+        dayBuyingPower += thisBuyingPower
     })
 
-    console.log('--------------------------------')
-    console.log('DAY P/L: ' + Number(dayTotal*100).toFixed(2))
+
+    const formattedDayRisk = nf.format(dayRisk * 100)
+
+    const formattedDayTotal = nf.format(dayTotal * 100)
+
+    const formattedDayBuyingPower = nf.format(dayBuyingPower)
+
+    console.log('------------------------------------------------------------------------------')
+    console.log('Day P/L: ' + formattedDayTotal)
+    console.log('Day Risk: -' + formattedDayRisk + ' (' + pnf.format((dayRisk * 100)/tradingAccountSize) + ')' )
+    console.log('Day Buying Power: ' + formattedDayBuyingPower)
     console.log(
         'Spreads: ' + spreadCount +
         ',       Winners: ' + spreadWinnerCount + ' (' + ((spreadWinnerCount/spreadCount)*100).toFixed(0) +
@@ -445,7 +522,7 @@ function monitor () {
         '%),       BEs: ' + ironCondorBECount + ' (' + + ((ironCondorBECount/ironCondorCount)*100).toFixed(0) +
         '%)'
     )
-    console.log('--------------------------------')
+    console.log('-------------------------------------------------------------------------------')
 
 }
 
