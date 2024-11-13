@@ -7,6 +7,19 @@ const day = `${dateObject.getFullYear()}-${String(dateObject.getMonth() + 1).pad
 const dataFileName = '/Users/scottike/SPX/' + day + '/data/now.json'
 const optionChainKey = day + ':0'
 
+const numberFormat = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD'
+})
+
+const percentFormat = new Intl.NumberFormat('en-US', {
+    style: 'percent',
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+})
+
+const accountSize = 40000.00
+
 const minCloseToATM = 10
 let maxCloseToATMCalls
 let maxCloseToATMPuts
@@ -35,8 +48,6 @@ const weightLong = 50
 const weightSpread = 5
 const weightClose = 5
 
-
-let rawData
 let puts = []
 let calls = []
 
@@ -58,32 +69,107 @@ const recommendationsName = 'recommendations'
 const recommendationName = 'recommendation'
 const positionsName = 'positions'
 
+let positions
+let list
+let rawData
+let currentMargin
 
+function readPositions () {
 
-// Read the JSON file asynchronously
-fs.readFile(dataFileName, 'utf8', (err, data) => {
-    if (err) {
-        console.error("Error reading the file:", err)
-        return
+    const positionsName = 'positions'
+    const fileRoot = '/Users/scottike/SPX/'
+    const positionsFile = fileRoot + day + '/' + positionsName  + '/' + positionsName + '.json'
+
+    try {
+        const fileData = fs.readFileSync(positionsFile, 'utf8')
+        positions = JSON.parse(fileData)
+    } catch (err) {
+        console.error("Error reading the positions file:", err)
+        positions = []
     }
 
-    // Parse the JSON data
-    rawData = JSON.parse(data)
+    console.log('=== positions ===')
+    console.log(JSON.stringify(positions, null, 2))
+
+    list = []
+    positions.forEach((ic) => {
+        let pos = {
+            shortSymbol: ic.putSpread.shortID,
+            shortStop: ic.ic.putShortStop,
+            shortSTO: ic.putSpread.bid,
+            short: ic.putSpread.short,
+            type: 'P',
+            time: ic.underlying.time,
+            longSymbol: ic.putSpread.longID,
+            longBTO: ic.putSpread.ask,
+            long: ic.putSpread.long,
+            netCredit: ic.putSpread.netCredit,
+            width: ic.putSpread.width
+        }
+        list.push(pos)
+        pos = {
+            shortSymbol: ic.callSpread.shortID,
+            shortStop: ic.ic.callShortStop,
+            shortSTO: ic.callSpread.bid,
+            short: ic.callSpread.short,
+            type: 'C',
+            time: ic.underlying.time,
+            longSymbol: ic.callSpread.longID,
+            longBTO: ic.callSpread.ask,
+            long: ic.callSpread.long,
+            netCredit: ic.callSpread.netCredit,
+            width: ic.callSpread.width
+        }
+        list.push(pos)
+    })
+
+    console.log('=== list ===')
+    console.log(JSON.stringify(list, null, 2))
+
+}
+
+function readData ()  {
+
+    try {
+        const fileContent = fs.readFileSync(dataFileName, 'utf8')
+        rawData = JSON.parse(fileContent)
+    } catch (err) {
+        console.error("Error reading the data file:", err)
+        rawData = undefined
+    }
+
+    console.log('=== rawData ===')
+    console.log(JSON.stringify(rawData, null, 2))
+
+}
+
+
+function recommendation () {
+
+    readData()
+
+    readPositions()
+
+    getCurrentMargin()
 
     prepData()
 
-    findCandidates()
-
-    processCandidates()
-
-    getVectorRecommendation()
-
-    printData()
-
-    placeOrder()
+}
 
 
-})
+function getCurrentMargin() {
+
+    currentMargin = 0
+    list.forEach((pos) => {
+        let thisMargin = (pos.width * 100) - pos.netCredit
+        console.log("Margin: " +  numberFormat.format(thisMargin))
+        currentMargin += thisMargin
+    })
+    console.log("Margin: " +  numberFormat.format(currentMargin))
+
+}
+recommendation()
+
 
 function prepData() {
 
@@ -135,6 +221,12 @@ function prepData() {
 
     calls.sort((a, b) => Number(b.strikePrice) - Number(a.strikePrice))
 
+    console.log('=== puts ===')
+    console.log(JSON.stringify(puts, null, 2))
+
+    console.log('=== calls ===')
+    console.log(JSON.stringify(calls, null, 2))
+
 
 }
 
@@ -172,7 +264,6 @@ function findCandidates() {
         puts.forEach((longLeg) => {
             if (shortLeg.strikePrice > longLeg.strikePrice) {
                 let putCandidate = {
-
                     id: ++counter,
                     width: shortLeg.strikePrice - longLeg.strikePrice,
                     closeToATM: spxLast - shortLeg.strikePrice,
@@ -180,11 +271,8 @@ function findCandidates() {
                     netCredit: shortLeg.bid - longLeg.ask,
                     longLeg: longLeg,
                     shortLeg: shortLeg
-                };
-
-
+                }
                 if (
-
                     putCandidate.longLegAsk >= minLong &&
                     putCandidate.longLegAsk <= maxLong &&
                     putCandidate.closeToATM >= minCloseToATM &&
@@ -192,10 +280,7 @@ function findCandidates() {
                     putCandidate.netCredit >= minNetCredit &&
                     putCandidate.netCredit <= maxNetCredit
                 ) {
-
-
-
-                    putCandidates.push(putCandidate);
+                    putCandidates.push(putCandidate)
                 }
             }
         })
@@ -363,11 +448,6 @@ function printData() {
 
     const timeFormatted = getTimeStringColon(new Date(spxTime))
 
-    const omeicDir = fileRoot + day + '/' + omeicName + '/'
-    const omeicRecommendationFile = omeicDir + recommendationName + '.json'
-    const omeicRecommendationTimeFile = omeicDir + recommendationName + '-' + timeFormatted + '.json'
-
-
     s = {
         symbol: spxSymbol,
         last: spxLast.toFixed(0),
@@ -390,8 +470,6 @@ function printData() {
             width: (putShort.strikePrice - putLong.strikePrice).toFixed(0),
             close: (spxLast - putShort.strikePrice).toFixed(0)
         }
-    } else {
-        tsp = 'No PUT recommendation'
     }
 
     if (callShort) {
@@ -409,39 +487,27 @@ function printData() {
             width: (callLong.strikePrice - callShort.strikePrice).toFixed(0),
             close: (callShort.strikePrice - spxLast).toFixed(0)
         }
-    } else {
-        tsc = 'No CALL recommendation'
     }
 
     let ic
     if (callShort && putShort) {
+
         ic = {
             putShortStop: (Number(tps.netCredit) + Number(tcs.netCredit) - 0.1 + (Number(tps.ask) * 1.2)).toFixed(2),
             callShortStop: (Number(tps.netCredit) + Number(tcs.netCredit) - 0.1 + (Number(tcs.ask) * 1.2)).toFixed(2),
             totalCredit: (Number(tcs.netCredit) + Number(tps.netCredit)).toFixed(2)
         }
-    } else {
-        ic = "No IC recommendation"
-    }
 
-    let r = {
-        underlying: s,
-        putSpread: tps,
-        callSpread: tcs,
-        ic: ic
-    }
+        let r = {
+            underlying: s,
+            putSpread: tps,
+            callSpread: tcs,
+            ic: ic
+        }
 
-    const recommendationTime_fd = fs.openSync(omeicRecommendationTimeFile, 'w')
-    try {
-        const content = JSON.stringify(r, null, 2)
-        fs.writeSync(recommendationTime_fd, content)
-    } catch (error) {
-        console.error('An error occurred while writing to the file:', error)
-    } finally {
-        fs.closeSync(recommendationTime_fd)
-    }
-
-    if (callShort && putShort) {
+        const omeicDir = fileRoot + day + '/' + omeicName + '/'
+        const omeicRecommendationFile = omeicDir + recommendationName + '.json'
+        const omeicRecommendationTimeFile = omeicDir + recommendationName + '-' + timeFormatted + '.json'
 
         const recommendation_fd = fs.openSync(omeicRecommendationFile, 'w')
         try {
@@ -453,16 +519,26 @@ function printData() {
             fs.closeSync(recommendation_fd)
         }
 
-    } else {
-
+        const recommendationTime_fd = fs.openSync(omeicRecommendationTimeFile, 'w')
         try {
-            fs.unlinkSync(omeicRecommendationFile)
-            // console.log('No recommendation, ' + omeicRecommendationFile + ' was successfully deleted.');
-        } catch (err) {
-            // console.error(`Error deleting file: ${err}`)
-            // console.error(`just move on, no need to delete something that is not there`)
+            const content = JSON.stringify(r, null, 2)
+            fs.writeSync(recommendationTime_fd, content)
+        } catch (error) {
+            console.error('An error occurred while writing to the file:', error)
+        } finally {
+            fs.closeSync(recommendationTime_fd)
         }
+
+    } else {
+        fs.unlink(omeicRecommendationFile, (err) => {
+            if (err) {
+                console.error(`Error deleting file: ${err}`)
+                return
+            }
+            console.log('No recommendation, ' + omeicRecommendationFile + ' was successfully deleted.');
+        })
     }
+
 
 }
 
@@ -514,7 +590,7 @@ function placeOrder () {
         const fileData = fs.readFileSync(omeicRecommendationFile, 'utf8')
         recommendation = JSON.parse(fileData)
     } catch (err) {
-        console.log('No recommendation, do not place the order.')
+        console.log('Cant find the recommendation, do not place the order.')
         return
         // console.error(err)
 
