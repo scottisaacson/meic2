@@ -1,45 +1,37 @@
-// Import the 'fs' module to interact with the file system
 const fs = require('fs')
 
-const dateObject = new Date();
-const day = `${dateObject.getFullYear()}-${String(dateObject.getMonth() + 1).padStart(2, '0')}-${String(dateObject.getDate()).padStart(2, '0')}`
+let day
 
-const dataFileName = '/Users/scottike/SPX/' + day + '/data/now.json'
-const optionChainKey = day + ':0'
+let dataFileName
+let optionChainKey
+let fileContent
 
-const numberFormat = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD'
-})
-
-const percentFormat = new Intl.NumberFormat('en-US', {
-    style: 'percent',
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-})
-
-const accountSize = 40000.00
-
-const minCloseToATM = 10
+let minCloseToATM = 10
+let fallbackMinCloseToATM = 4
 let maxCloseToATMCalls
 let maxCloseToATMPuts
 
-const maxSpread = 50
+let maxSpread = 50
+let fallbackMaxSpread = 50
 let minSpreadCalls
 let minSpreadPuts
 
+let minNetCredit = 0.80
+let maxNetCredit = 2.80
+let fallbackMinNetCredit = 0.50
+let fallbackMaxNetCredit = 3.10
 
-const minNetCredit = 0.80
-const optNetCredit = 1.80
-const maxNetCredit = 2.80
+
 let minActualNetCreditCalls
 let maxActualNetCreditCalls
 let minActualNetCreditPuts
 let maxActualNetCreditPuts
 
 
-const minLong = 0.10
-const maxLong = 1.00
+let minLong = 0.10
+let maxLong = 1.00
+let fallbackMinLong = 0.10
+let fallbackMaxLong = 5.00
 let maxLongCalls
 let maxLongPuts
 
@@ -48,6 +40,8 @@ const weightLong = 50
 const weightSpread = 5
 const weightClose = 5
 
+
+let rawData
 let puts = []
 let calls = []
 
@@ -63,113 +57,81 @@ let callLong
 let putCandidates = []
 let callCandidates = []
 
-const fileRoot = '/Users/scottike/SPX/'
+let positions
+
+
+const SPX_HOME = process.env.SPX_HOME
+const DTE = process.env.DTE
+
+const fileRoot =    SPX_HOME + '/'
 const omeicName = 'omeic'
-const recommendationsName = 'recommendations'
 const recommendationName = 'recommendation'
 const positionsName = 'positions'
 
-let positions
-let list
-let rawData
-let currentMargin
+let positionsFile
 
-function readPositions () {
+function main () {
 
-    const positionsName = 'positions'
-    const fileRoot = '/Users/scottike/SPX/'
-    const positionsFile = fileRoot + day + '/' + positionsName  + '/' + positionsName + '.json'
-
-    try {
-        const fileData = fs.readFileSync(positionsFile, 'utf8')
-        positions = JSON.parse(fileData)
-    } catch (err) {
-        console.error("Error reading the positions file:", err)
-        positions = []
+    const desiredDate = fs.readFileSync(SPX_HOME + '/.date', "utf-8")
+    if (desiredDate === 'today') {
+        const dateObject = new Date();
+        day = `${dateObject.getFullYear()}-${String(dateObject.getMonth() + 1).padStart(2, '0')}-${String(dateObject.getDate()).padStart(2, '0')}`
+    } else {
+        day = desiredDate
     }
 
-    console.log('=== positions ===')
-    console.log(JSON.stringify(positions, null, 2))
-
-    list = []
-    positions.forEach((ic) => {
-        let pos = {
-            shortSymbol: ic.putSpread.shortID,
-            shortStop: ic.ic.putShortStop,
-            shortSTO: ic.putSpread.bid,
-            short: ic.putSpread.short,
-            type: 'P',
-            time: ic.underlying.time,
-            longSymbol: ic.putSpread.longID,
-            longBTO: ic.putSpread.ask,
-            long: ic.putSpread.long,
-            netCredit: ic.putSpread.netCredit,
-            width: ic.putSpread.width
-        }
-        list.push(pos)
-        pos = {
-            shortSymbol: ic.callSpread.shortID,
-            shortStop: ic.ic.callShortStop,
-            shortSTO: ic.callSpread.bid,
-            short: ic.callSpread.short,
-            type: 'C',
-            time: ic.underlying.time,
-            longSymbol: ic.callSpread.longID,
-            longBTO: ic.callSpread.ask,
-            long: ic.callSpread.long,
-            netCredit: ic.callSpread.netCredit,
-            width: ic.callSpread.width
-        }
-        list.push(pos)
-    })
-
-    console.log('=== list ===')
-    console.log(JSON.stringify(list, null, 2))
-
-}
-
-function readData ()  {
+    dataFileName = SPX_HOME + '/' + day + '/data/now.json'
+    optionChainKey = day + ':' + DTE
 
     try {
-        const fileContent = fs.readFileSync(dataFileName, 'utf8')
-        rawData = JSON.parse(fileContent)
+
+        fileContent = fs.readFileSync(dataFileName, 'utf8')
+        if (!fileContent) {
+            console.log('nada')
+            return
+        }
     } catch (err) {
-        console.error("Error reading the data file:", err)
-        rawData = undefined
+        // console.err('file read error: ' + err)
+        console.log('nada')
+        return
     }
 
-    console.log('=== rawData ===')
-    console.log(JSON.stringify(rawData, null, 2))
-
-}
-
-
-function recommendation () {
-
-    readData()
-
-    readPositions()
-
-    getCurrentMargin()
+    // Parse the JSON data
+    rawData = JSON.parse(fileContent)
 
     prepData()
 
+    getPositions()
+
+    findCandidates()
+
+    processCandidates()
+
+    getVectorRecommendation()
+
+    if (!putLong || !putShort || !callLong || !callShort) {
+
+        minLong = fallbackMinLong
+        maxLong = fallbackMaxLong
+        minCloseToATM = fallbackMinCloseToATM
+        minNetCredit = fallbackMinNetCredit
+        maxNetCredit = fallbackMaxNetCredit
+
+        findCandidates()
+
+        processCandidates()
+
+        getVectorRecommendation()
+
+    }
+
+    printData()
+
+    placeOrder()
+
 }
 
-
-function getCurrentMargin() {
-
-    currentMargin = 0
-    list.forEach((pos) => {
-        let thisMargin = (pos.width * 100) - pos.netCredit
-        console.log("Margin: " +  numberFormat.format(thisMargin))
-        currentMargin += thisMargin
-    })
-    console.log("Margin: " +  numberFormat.format(currentMargin))
-
-}
-recommendation()
-
+main()
 
 function prepData() {
 
@@ -194,13 +156,15 @@ function prepData() {
             theta: optFull.theta,
             strikePrice: Number(optFull.strikePrice)
         }
-        if (optSummary.strikePrice < spxLast && optSummary.ask >= minLong) {
+        if (optSummary.strikePrice < spxLast && optSummary.ask >= minLong && optSummary.bid > 0) {
+            // console.log('ACCEPTING PUT ' + optSummary.strikePrice.toFixed(0))
             puts.push(optSummary)
+        } else {
+            // console.log('REJECTING PUT ' + optSummary.strikePrice.toFixed(0))
         }
     })
 
     puts.sort((a, b) => Number(a.strikePrice) - Number(b.strikePrice))
-
 
     Object.keys(callMap).forEach(key => {
         const optFull = callMap[key][0]
@@ -214,37 +178,89 @@ function prepData() {
             theta: optFull.theta,
             strikePrice: Number(optFull.strikePrice)
         }
-        if (optSummary.strikePrice > spxLast && optSummary.ask >= minLong) {
+        if (optSummary.strikePrice > spxLast && optSummary.ask >= minLong && optSummary.bid > 0) {
+            // console.log('ACCEPTING CALL ' + optSummary.strikePrice.toFixed(0))
             calls.push(optSummary)
+        } else {
+            // console.log('REJECTING CALL ' + optSummary.strikePrice.toFixed(0))
         }
     })
 
     calls.sort((a, b) => Number(b.strikePrice) - Number(a.strikePrice))
-
-    console.log('=== puts ===')
-    console.log(JSON.stringify(puts, null, 2))
-
-    console.log('=== calls ===')
-    console.log(JSON.stringify(calls, null, 2))
 
 
 }
 
 function findCandidates() {
 
+    let shortPositions = []
+    let longPositions = []
+
+    //   {
+    //     "underlying": {
+    //     },
+    //     "putSpread": {
+    //       "long": "5960",
+    //       "longSymbol": ".SPXW241127P5960",
+    //       "longID": "SPXW  241127P05960000",
+    //       "short": "5995",
+    //       "shortSymbol": ".SPXW241127P5995",
+    //       "shortID": "SPXW  241127P05995000",
+    //     },
+    //     "callSpread": {
+    //       "long": "6015",
+    //       "longSymbol": ".SPXW241127C6015",
+    //       "longID": "SPXW  241127C06015000",
+    //       "short": "6005",
+    //       "shortSymbol": ".SPXW241127C6005",
+    //       "shortID": "SPXW  241127C06005000",
+    //     },
+    //     "ic": {
+    //     }
+    //   }
+
+    positions.forEach((pos) => {
+        if (!longPositions.includes(pos.callSpread.long)) {
+            longPositions.push(pos.callSpread.long)
+        }
+        if (!longPositions.includes(pos.putSpread.long)) {
+            longPositions.push(pos.putSpread.long)
+        }
+        if (!shortPositions.includes(pos.callSpread.short)) {
+            shortPositions.push(pos.callSpread.short)
+        }
+        if (!shortPositions.includes(pos.putSpread.short)) {
+            shortPositions.push(pos.putSpread.short)
+        }
+    })
+
+    //[
+    //   {
+    //     "symbol": "SPXW  241127C06000000",
+    //     "description": "SPXW 11/27/2024 6000.00 C",
+    //     "bid": 0.1,
+    //     "ask": 0.15,
+    //     "last": 0.1,
+    //     "delta": 0.133,
+    //     "theta": -0.125,
+    //     "strikePrice": 6000
+    //   }
+    // ]
+
     let counter = 0
     calls.forEach((shortLeg) => {
         calls.forEach((longLeg) => {
             if (shortLeg.strikePrice < longLeg.strikePrice) {
                 let callCandidate = {
-                    id: ++counter,
-                    width: longLeg.strikePrice - shortLeg.strikePrice,
-                    closeToATM: shortLeg.strikePrice - spxLast,
-                    longLegAsk: longLeg.ask,
-                    netCredit: shortLeg.bid - longLeg.ask,
-                    longLeg: longLeg,
-                    shortLeg: shortLeg
-                }
+                        id: ++counter,
+                        width: longLeg.strikePrice - shortLeg.strikePrice,
+                        closeToATM: shortLeg.strikePrice - spxLast,
+                        longLegAsk: longLeg.ask,
+                        netCredit: shortLeg.bid - longLeg.ask,
+                        longLeg: longLeg,
+                        shortLeg: shortLeg
+                    }
+
                 if (
                     callCandidate.longLegAsk >= minLong &&
                     callCandidate.longLegAsk <= maxLong &&
@@ -253,7 +269,19 @@ function findCandidates() {
                     callCandidate.netCredit >= minNetCredit &&
                     callCandidate.netCredit <= maxNetCredit
                 ) {
-                    callCandidates.push(callCandidate)
+                    if (
+                        !shortPositions.includes(longLeg.strikePrice.toFixed(0)) &&
+                        !longPositions.includes(shortLeg.strikePrice.toFixed(0))
+                    ) {
+                        callCandidates.push(callCandidate)
+                    }
+                    // } else {
+                    //     if (shortPositions.includes(longLeg.strikePrice.toFixed(0))) {
+                    //         console.log(longLeg.strikePrice.toFixed(0) + " BTO after a STO would be a BTC")
+                    //     } else {
+                    //         console.log(shortLeg.strikePrice.toFixed(0) + " STO after a BTO would be a STC")
+                    //     }
+                    // }
                 }
             }
         })
@@ -272,6 +300,7 @@ function findCandidates() {
                     longLeg: longLeg,
                     shortLeg: shortLeg
                 }
+
                 if (
                     putCandidate.longLegAsk >= minLong &&
                     putCandidate.longLegAsk <= maxLong &&
@@ -280,7 +309,19 @@ function findCandidates() {
                     putCandidate.netCredit >= minNetCredit &&
                     putCandidate.netCredit <= maxNetCredit
                 ) {
-                    putCandidates.push(putCandidate)
+                    if (
+                        !shortPositions.includes(longLeg.strikePrice.toFixed(0)) &&
+                        !longPositions.includes(shortLeg.strikePrice.toFixed(0))
+                    ) {
+                        putCandidates.push(putCandidate)
+                    }
+                    // } else {
+                    //     if (shortPositions.includes(longLeg.strikePrice.toFixed(0))) {
+                    //         console.log(longLeg.strikePrice.toFixed(0) + " BTO after a STO would be a BTC")
+                    //     } else {
+                    //         console.log(shortLeg.strikePrice.toFixed(0) + " STO after a BTO would be a STC")
+                    //     }
+                    // }
                 }
             }
         })
@@ -402,6 +443,17 @@ function processCandidates() {
     })
 
 
+    // console.log('puts')
+    // putCandidates.forEach((put) => {
+    //     console.log(put.shortLeg.strikePrice + ',' + put.longLeg.strikePrice  + ',' + put.shortLeg.bid.toFixed(2)  + ',' + put.longLeg.ask.toFixed(2)  + ',' + put.netCredit.toFixed(2)  + ',' + put.closeToATM.toFixed(0) + ',' + put.width.toFixed(0))
+    // })
+    //
+    // console.log('calls')
+    // callCandidates.forEach((call) => {
+    //     console.log(call.shortLeg.strikePrice + ',' + call.longLeg.strikePrice  + ',' + call.shortLeg.bid.toFixed(2)  + ',' + call.longLeg.ask.toFixed(2)  + ',' + call.netCredit.toFixed(2)  + ',' + call.closeToATM.toFixed(0) + ',' + call.width.toFixed(0))
+    // })
+
+
 }
 
 
@@ -446,7 +498,12 @@ function printData() {
     elements[0] = elements[0].substring(2, 4)
     const shortDay = elements.join('')
 
-    const timeFormatted = getTimeStringColon(new Date(spxTime))
+    const timeFormatted = getTimeStringDash(new Date(spxTime))
+
+    const omeicDir = fileRoot + day + '/' + omeicName + '/'
+    const omeicRecommendationFile = omeicDir + recommendationName + '.json'
+    const omeicRecommendationTimeFile = omeicDir + recommendationName + '-' + timeFormatted + '.json'
+
 
     s = {
         symbol: spxSymbol,
@@ -470,6 +527,8 @@ function printData() {
             width: (putShort.strikePrice - putLong.strikePrice).toFixed(0),
             close: (spxLast - putShort.strikePrice).toFixed(0)
         }
+    } else {
+        tsp = 'No PUT recommendation'
     }
 
     if (callShort) {
@@ -487,27 +546,39 @@ function printData() {
             width: (callLong.strikePrice - callShort.strikePrice).toFixed(0),
             close: (callShort.strikePrice - spxLast).toFixed(0)
         }
+    } else {
+        tsc = 'No CALL recommendation'
     }
 
     let ic
     if (callShort && putShort) {
-
         ic = {
             putShortStop: (Number(tps.netCredit) + Number(tcs.netCredit) - 0.1 + (Number(tps.ask) * 1.2)).toFixed(2),
             callShortStop: (Number(tps.netCredit) + Number(tcs.netCredit) - 0.1 + (Number(tcs.ask) * 1.2)).toFixed(2),
             totalCredit: (Number(tcs.netCredit) + Number(tps.netCredit)).toFixed(2)
         }
+    } else {
+        ic = "No IC recommendation"
+    }
 
-        let r = {
-            underlying: s,
-            putSpread: tps,
-            callSpread: tcs,
-            ic: ic
-        }
+    let r = {
+        underlying: s,
+        putSpread: tps,
+        callSpread: tcs,
+        ic: ic
+    }
 
-        const omeicDir = fileRoot + day + '/' + omeicName + '/'
-        const omeicRecommendationFile = omeicDir + recommendationName + '.json'
-        const omeicRecommendationTimeFile = omeicDir + recommendationName + '-' + timeFormatted + '.json'
+    const recommendationTime_fd = fs.openSync(omeicRecommendationTimeFile, 'w')
+    try {
+        const content = JSON.stringify(r, null, 2)
+        fs.writeSync(recommendationTime_fd, content)
+    } catch (error) {
+        console.error('An error occurred while writing to the file:', error)
+    } finally {
+        fs.closeSync(recommendationTime_fd)
+    }
+
+    if (callShort && putShort) {
 
         const recommendation_fd = fs.openSync(omeicRecommendationFile, 'w')
         try {
@@ -519,26 +590,16 @@ function printData() {
             fs.closeSync(recommendation_fd)
         }
 
-        const recommendationTime_fd = fs.openSync(omeicRecommendationTimeFile, 'w')
-        try {
-            const content = JSON.stringify(r, null, 2)
-            fs.writeSync(recommendationTime_fd, content)
-        } catch (error) {
-            console.error('An error occurred while writing to the file:', error)
-        } finally {
-            fs.closeSync(recommendationTime_fd)
-        }
-
     } else {
-        fs.unlink(omeicRecommendationFile, (err) => {
-            if (err) {
-                console.error(`Error deleting file: ${err}`)
-                return
-            }
-            console.log('No recommendation, ' + omeicRecommendationFile + ' was successfully deleted.');
-        })
-    }
 
+        try {
+            fs.unlinkSync(omeicRecommendationFile)
+            // console.log('No recommendation, ' + omeicRecommendationFile + ' was successfully deleted.');
+        } catch (err) {
+            // console.error(`Error deleting file: ${err}`)
+            // console.error(`just move on, no need to delete something that is not there`)
+        }
+    }
 
 }
 
@@ -579,9 +640,19 @@ function getTimeStringDash(date) {
 }
 
 
+function getPositions () {
+    try {
+        positionsFile = fileRoot + day + '/' + positionsName + '/' + positionsName + '.json'
+        const fileData = fs.readFileSync(positionsFile, 'utf8')
+        positions = JSON.parse(fileData)
+    } catch (err) {
+        positions = []
+    }
+}
+
+
 function placeOrder () {
 
-    const positionsFile = fileRoot + day + '/' + positionsName + '/' + positionsName + '.json'
     const omeicDir = fileRoot + day + '/' + omeicName + '/'
     const omeicRecommendationFile = omeicDir + recommendationName + '.json'
 
@@ -590,19 +661,13 @@ function placeOrder () {
         const fileData = fs.readFileSync(omeicRecommendationFile, 'utf8')
         recommendation = JSON.parse(fileData)
     } catch (err) {
-        console.log('Cant find the recommendation, do not place the order.')
+        console.log('No recommendation, do not place the order.')
         return
         // console.error(err)
 
     }
 
-    let positions
-    try {
-        const fileData = fs.readFileSync(positionsFile, 'utf8')
-        positions = JSON.parse(fileData)
-    } catch (err) {
-        positions = []
-    }
+    getPositions()
 
     positions.push(recommendation)
 

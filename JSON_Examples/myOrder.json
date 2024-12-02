@@ -2,7 +2,7 @@
   "complexOrderStrategyType": "NONE",
   "orderType": "LIMIT",
   "session": "NORMAL",
-  "price": "0.10",
+  "price": "5.00",
   "duration": "DAY",
   "orderStrategyType": "SINGLE",
   "orderLegCollection": [
@@ -10,7 +10,7 @@
       "instruction": "BUY_TO_OPEN",
       "quantity": 1,
       "instrument": {
-        "symbol": "SPXW  241111C06030000",
+        "symbol": "SPXW  241122C05955000",
         "assetType": "OPTION"
       }
     }

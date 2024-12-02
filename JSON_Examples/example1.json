@@ -1,0 +1,62 @@
+{
+  "orderStrategyType": "TRIGGER",
+  "orderType": "NET_CREDIT",
+  "price": "1.00",
+  "duration": "DAY",
+  "session": "NORMAL",
+  "orderLegCollection": [
+    {
+      "instruction": "SELL_TO_OPEN",
+      "quantity": 1,
+      "instrument": {
+        "assetType": "OPTION",
+        "symbol": "SPXW  241125P05975000"
+      }
+    },
+    {
+      "instruction": "BUY_TO_OPEN",
+      "quantity": 1,
+      "instrument": {
+        "assetType": "OPTION",
+        "symbol": "SPXW  241125P05935000"
+      }
+    }
+  ],
+  "childOrderStrategies": [
+    {
+      "orderType": "STOP",
+      "session": "NORMAL",
+      "stopPrice": "2.00",
+      "duration": "DAY",
+      "orderStrategyType": "TRIGGER",
+      "orderLegCollection": [
+        {
+          "instruction": "BUY_TO_CLOSE",
+          "quantity": 1,
+          "instrument": {
+            "symbol": "SPXW  241125P05975000",
+            "assetType": "OPTION"
+          }
+        }
+      ],
+      "childOrderStrategies": [
+        {
+          "orderType": "MARKET",
+          "session": "NORMAL",
+          "duration": "DAY",
+          "orderStrategyType": "SINGLE",
+          "orderLegCollection": [
+            {
+              "instruction": "SELL_TO_CLOSE",
+              "quantity": 1,
+              "instrument": {
+                "symbol": "SPXW  241125P05935000",
+                "assetType": "OPTION"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

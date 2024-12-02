@@ -1,12 +1,19 @@
 {
-  "name": "meic1",
+  "name": "ikebot",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Ike Schwab MEIC trading software",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"No test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "author": "Scott Isaacson",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.7.5",
+    "dotenv": "^16.4.5",
+    "fs": "^0.0.1-security",
+    "https": "^1.0.0"
+  }
 }
+
+
