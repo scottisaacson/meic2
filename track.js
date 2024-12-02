@@ -4,7 +4,6 @@ const path = require('path');
 
 const dateObject = new Date();
 const day = `${dateObject.getFullYear()}-${String(dateObject.getMonth() + 1).padStart(2, '0')}-${String(dateObject.getDate()).padStart(2, '0')}`
-// const day = '2024-10-31'
 const dataDirName = '/Users/scottike/SPX/' + day + '/data'
 
 
@@ -213,6 +212,7 @@ function monitor () {
 
     const positionsName = 'positions'
     const fileRoot = '/Users/scottike/SPX/'
+    //const positionsFile = fileRoot + day + '/' + positionsName  + '/' + positionsName + '-EARLY.json'
     const positionsFile = fileRoot + day + '/' + positionsName  + '/' + positionsName + '.json'
 
     let positions
@@ -233,7 +233,8 @@ function monitor () {
             time: ic.underlying.time,
             longSymbol: ic.putSpread.longID,
             longBTO: ic.putSpread.ask,
-            netCredit: ic.putSpread.netCredit
+            netCredit: ic.putSpread.netCredit,
+            strikePrice: ic.putSpread.short
         }
         list.push(pos)
         pos = {
@@ -244,59 +245,17 @@ function monitor () {
             time: ic.underlying.time,
             longSymbol: ic.callSpread.longID,
             longBTO: ic.callSpread.ask,
-            netCredit: ic.callSpread.netCredit
+            netCredit: ic.callSpread.netCredit,
+            strikePrice: ic.callSpread.short
         }
         list.push(pos)
     })
 
-    // for the day
-    let dayTotal = 0
-
-    // keep track of spreads
-    let spreadCount = 0
-    let spreadWinnerCount = 0
-    let spreadLoserCount = 0
-    let spreadTotal = 0
-
-    // keep track of ICs
-    let ironCondorSpreadCount = 0
-    let ironCondorStopCount = 0
-    let ironCondorTotal = 0
-
-    let ironCondorCount = 0
-    let ironCondorWinnerCount = 0
-    let ironCondorLoserCount = 0
-    let ironCondorBECount = 0
-
-    dayTotal = 0
-    spreadCount = 0
-    spreadWinnerCount = 0
-    spreadLoserCount = 0
-
-    ironCondorStopCount = 0
-    ironCondorWinnerCount = 0
-    ironCondorLoserCount = 0
-    ironCondorBECount = 0
-
-
     list.forEach((pos) => {
 
-        // Each POS is a new spread so start the spread data
-        // Each IC is two spreads and so if this is the first spread, start the IC data
-        if (ironCondorSpreadCount == 0) {
-            ironCondorTotal = 0
-            ironCondorStopCount = 0
-        }
-        spreadTotal = 0
-
-
         console.log('======================')
-
-        console.log('SHORT STO: ' + Number(pos.shortSTO).toFixed(2))
-        spreadTotal += Number(pos.shortSTO)
-        console.log('LONG  BTO: -' + Number(pos.longBTO).toFixed(2))
-        spreadTotal -= Number(pos.longBTO)
-
+        const t = (pos.type == 'P' ? 'PUT' : 'CALL')
+        console.log(t + ' ' + pos.strikePrice + ' ' + pos.shortStop)
 
         let asks = []
         let files = getFilesInDirectory(dataDirName)
@@ -308,108 +267,48 @@ function monitor () {
         })
 
         let stopped = false
+        let minAsk
+        let maxAsk
+        let currentTime
+        let currentAsk
+        // for every possible ask for this position
         asks.forEach((ask) => {
+            // look at the ask, only after we entered the position
             if (!compareTimeEalier(ask.time, pos.time)) {
+                currentTime = ask.time
                 if (stopped == false) {
                     if (Number(ask.ask) > Number(pos.shortStop)) {
                         stopped = true
-                        ironCondorStopCount++
-                        console.log(`SHORT STOPPED BTC: -${ask.ask.toFixed(2)}`)
-                        spreadTotal -= Number(ask.ask)
-                        let bid = getPriceAtTimeForLong(pos, ask.time)
-                        if (bid) {
-                            console.log(`LONG EXIT STC: ${bid.bid.toFixed(2)}`)
-                            spreadTotal += Number(bid.bid)
-                        } else {
-                            console.log(`LONG SOLD, STC ERROR`)
-                        }
+                        // console.log('STOPPED ' + ask.time + ' ' + ask.ask.toFixed(2))
                     } else {
-                        // console.log(`Time*: ${ask.time}, Ask: ${ask.ask.toFixed(2)}`)
+                        // console.log('TRACKING ' + ask.time + ' ' + ask.ask.toFixed(2))
+                    }
+                    currentAsk = ask.ask
+                    if (minAsk == undefined ) {
+                        minAsk = ask.ask
+                    } else if (ask.ask <= minAsk) {
+                        minAsk = ask.ask
+                    }
+                    if (maxAsk == undefined ) {
+                        maxAsk = ask.ask
+                    } else if (ask.ask >= maxAsk) {
+                        maxAsk = ask.ask
                     }
                 }
             } else {
                 // console.log(`Time: ${ask.time}, Ask: ${ask.ask.toFixed(2)}`)
             }
-
         })
-        if (stopped == false) {
-
-            const currentTime = new Date()
-            currentTime.setMinutes(currentTime.getMinutes() - 3)
-            const timeNowFormatted = getTimeStringColon(currentTime.valueOf())
-
-            let bid = getPriceAtTimeForLong(pos, timeNowFormatted)
-            let ask = getPriceAtTimeForShort(pos, timeNowFormatted)
-
-            let askValue = 0
-            let bidValue = 0
-            if (ask && ask.ask) {
-                askValue = ask.ask
-            }
-            if (bid && bid.bid) {
-                bidValue = bid.bid
-            }
-            console.log(`SHORT EXIT BTC: -${askValue.toFixed(2)}`)
-            spreadTotal -= Number(askValue)
-            console.log(`LONG EXIT STC: ${bidValue.toFixed(2)}`)
-            spreadTotal -= Number(bidValue)
-
-        }
-
-        // figure out the spread stuff
-        console.log('Spread P/L: ' + Number(spreadTotal).toFixed(2))
-        spreadCount++
-        if (Number(spreadTotal) >= 0) {
-            spreadWinnerCount++
+        if (stopped) {
+            console.log('STOPPED ' /* + currentTime + ' '*/ + maxAsk.toFixed(2))
         } else {
-            spreadLoserCount++
-        }
-        console.log('======================')
-
-
-        // now figure out the IC stuff
-        if (ironCondorSpreadCount == 0 ) {
-            ironCondorSpreadCount = 1
-            ironCondorTotal += spreadTotal
-        } else {
-            ironCondorSpreadCount = 0
-            ironCondorTotal += spreadTotal
-            ironCondorCount++
-            if (ironCondorStopCount == 0) {
-                ironCondorWinnerCount++
-            } else if (ironCondorStopCount == 2) {
-                ironCondorLoserCount++
-            } else {
-                ironCondorBECount++
-            }
-            console.log('**********************')
-            console.log('IC P/L: ' + ironCondorTotal.toFixed(2))
-            console.log('IC Stops: ' + ironCondorStopCount)
-            console.log('**********************')
+            // console.log('TRACKING ' /* + currentTime + ' '*/ + 'min=' + minAsk.toFixed(2) + ', max=' + maxAsk.toFixed(2))
+            console.log('CURRENT: ' /* + currentTime + ' '*/ + currentAsk.toFixed(2) + ', MAX: ' + maxAsk.toFixed(2))
         }
 
-        dayTotal += Number(spreadTotal)
     })
 
-    console.log('----------------------')
-    console.log('DAY P/L: ' + Number(dayTotal*100).toFixed(2))
-    console.log(
-        'Spreads: ' + spreadCount +
-        ',       Winners: ' + spreadWinnerCount + ' (' + ((spreadWinnerCount/spreadCount)*100).toFixed(0) +
-        '%),       Losers: ' + spreadLoserCount + ' (' + ((spreadLoserCount/spreadCount)*100).toFixed(0) +
-        '%)'
-    )
-    console.log(
-        'ICs: ' + ironCondorCount +
-        ',           Winners: ' + ironCondorWinnerCount + ' (' + ((ironCondorWinnerCount/ironCondorCount)*100).toFixed(0) +
-        '%),       Losers: ' + ironCondorLoserCount + ' (' + ((ironCondorLoserCount/ironCondorCount)*100).toFixed(0) +
-        '%),       BEs: ' + ironCondorBECount + ' (' + + ((ironCondorBECount/ironCondorCount)*100).toFixed(0) +
-        '%)'
-    )
-    console.log('----------------------')
-
 }
-
 
 
 function convertEpochToLocalTime(epoch) {

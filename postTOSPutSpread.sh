@@ -1,6 +1,12 @@
-export ACCESS_TOKEN=`cat /Users/scottike/SPX/.access`
-export ACCOUNT_HASH=`cat /Users/scottike/SPX/.hashvalue`
-export DATE=$(date +"%Y-%m-%d")
+export ACCESS_TOKEN=`cat ${SPX_HOME}/.access`
+export ACCOUNT_HASH=`cat ${SPX_HOME}/.hashvalue`
+export DATE_DESIRED=`cat ${SPX_HOME}/.date`
+
+if [[ "${DATE_DESIRED}" -eq "today" ]]; then
+  export DATE=$(date +"%Y-%m-%d")
+else
+  export DATE=${DATE_DESIRED}
+fi
 export TIME_STAMP=`date |  sed -e "s/[ ][ ]*/ /g" | cut -d ' ' -f4 | sed -e "s/:/-/g"`
 
 echo "==========================================="
@@ -11,5 +17,6 @@ curl -v -X 'POST' \
   -H 'accept: */*' \
   -H "Authorization: Bearer ${ACCESS_TOKEN}" \
   -H 'Content-Type: application/json' \
-  --data @myOrder.json
+  --data @"${SPX_HOME}/${DATE}/omeic/tosPutOrderBody.json"
+  
 

@@ -1,0 +1,18 @@
+{
+  "orderType": "STOP",
+  "session": "NORMAL",
+  "stopPrice": "7.0",
+  "duration": "GOOD_TILL_CANCEL",
+  "orderStrategyType": "SINGLE",
+  "complexOrderStrategyType": "NONE",
+  "orderLegCollection": [
+    {
+      "instruction": "BUY_TO_CLOSE",
+      "quantity": 1,
+      "instrument": {
+        "symbol": "SPXW  241125P05915000",
+        "assetType": "OPTION"
+      }
+    }
+  ]
+}

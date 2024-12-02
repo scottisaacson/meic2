@@ -1,13 +1,18 @@
 #!/bin/bash
 
-# Define the times when you want to run the command
-#times=("08:28" "08:58" "09:13" "09:43" "09:58" "10:13" "10:58" "11:28" "11:43" "12:13" "12:28" "12:43")
-#times=("08:28" "08:58" "09:28" "09:58" "10:28" "10:58" "11:28" "11:58" "12:28" "12:43")
-times=("08:58" "09:28" "09:43" "10:13" "10:28" "10:43" "10:58" "11:28" "11:43" "12:13" "12:28" "12:43")
-echo "${times[@]}"
+#times=("09:13" "09:28" "09:43" "09:58" "10:13" "10:28")
+#times=("10:58" "11:28" "11:43" "12:13" "12:28" "12:43")
+times=("10:58" "11:13" "11:28" "11:43" "11:58" "12:13")
+#echo "${times[@]}"
+
+
+cd /Users/scottike/WebstormProjects/ikebot
 
 # The command you want to run
-command="./recommend1.sh"
+# command="./recommend.sh"
+# command='echo "Manually run poll.sh then recommend.sh"'
+# command="./placeTOSOrders.sh"
+command="./recommend.sh"
 
 while true; do
     # Get the current time in HH:MM format

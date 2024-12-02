@@ -37,6 +37,15 @@ async function refreshAuthToken() {
       data: `grant_type=refresh_token&refresh_token=${old_refreshToken}`,
     })
 
+
+    const now = new Date()
+    const formattedDate = formatDateToISOWithMicroseconds(now)
+    let mqtt = {
+      access_token_issued: formattedDate,
+      refresh_token_issued: formattedDate,
+      token_dictionary: response.data
+    }
+
     // Log the new refresh_token and access_token
     accessToken = response.data.access_token;
     refreshToken = response.data.refresh_token;
@@ -51,6 +60,11 @@ async function refreshAuthToken() {
       fs.writeFileSync('/Users/scottike/SPX/.refresh', refreshToken);
     } catch (err) {
       console.error('Error saving Access Token:', err);
+    }
+    try {
+      fs.writeFileSync('/Users/scottike/SPX/.tokens.json', JSON.stringify(mqtt, null, 2))
+    } catch (err) {
+      console.error('Error saving tokens.json:', err);
     }
 
     return response.data
@@ -97,3 +111,21 @@ async function main() {
 }
 
 main().catch(console.error);
+
+
+function formatDateToISOWithMicroseconds(date) {
+  const pad = (n, length = 2) => String(n).padStart(length, '0');
+
+  const year = date.getUTCFullYear();
+  const month = pad(date.getUTCMonth() + 1);
+  const day = pad(date.getUTCDate());
+  const hours = pad(date.getUTCHours());
+  const minutes = pad(date.getUTCMinutes());
+  const seconds = pad(date.getUTCSeconds());
+  const milliseconds = pad(date.getUTCMilliseconds(), 3);
+  const microseconds = '000'; // JavaScript doesn't support microsecond precision natively
+  const timezone = '+00:00'; // This format explicitly specifies UTC timezone
+
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}${microseconds}${timezone}`;
+}
+
