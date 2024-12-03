@@ -308,7 +308,7 @@ function monitor () {
 
         let stopped = false
         asks.forEach((ask) => {
-            if (!compareTimeEalier(ask.time, pos.time)) {
+            if (!compareTimeEalier(ask.time, pos.time.replace(/-/g, ":"))) {
                 if (stopped == false) {
                     if (Number(ask.ask) > Number(pos.shortStop)) {
                         stopped = true

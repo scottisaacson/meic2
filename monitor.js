@@ -395,7 +395,7 @@ function monitor () {
         stopped = false
         asks.forEach((ask) => {
             askTime = ask.time
-            if (!compareTimeEalier(ask.time, pos.time)) {
+            if (!compareTimeEalier(ask.time, pos.time.replace(/-/g, ":"))) {
                 if (stopped == false) {
                     if (Number(ask.ask) > Number(pos.shortStop)) {
                         // we are now stopping out this position

@@ -274,7 +274,7 @@ function monitor () {
         // for every possible ask for this position
         asks.forEach((ask) => {
             // look at the ask, only after we entered the position
-            if (!compareTimeEalier(ask.time, pos.time)) {
+            if (!compareTimeEalier(ask.time, pos.time.replace(/-/g, ":"))) {
                 currentTime = ask.time
                 if (stopped == false) {
                     if (Number(ask.ask) > Number(pos.shortStop)) {
